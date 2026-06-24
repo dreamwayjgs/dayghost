@@ -1,16 +1,33 @@
 import { Elysia } from "elysia";
 import { staticPlugin } from "@elysiajs/static";
 import { join } from "path";
+import { readFileSync } from "fs";
 import db from "./db";
 
+const BUILD_TIME = Date.now();
+const publicDir = join(process.cwd(), "public");
+
 const app = new Elysia()
-  .use(staticPlugin({ assets: join(process.cwd(), "public"), prefix: "/" }))
-  .onAfterHandle(({ path }, res) => {
-    if (path === "/sw.js" || path === "/index.html" || path === "/") {
-      res.headers = res.headers || {};
-      res.headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
-    }
+  .get("/", () => {
+    let html = readFileSync(join(publicDir, "index.html"), "utf-8");
+    html = html.replace(
+      "navigator.serviceWorker.register('/sw.js')",
+      `navigator.serviceWorker.register('/sw.js?v=${BUILD_TIME}')`
+    );
+    return new Response(html, {
+      headers: { "Content-Type": "text/html", "Cache-Control": "no-cache" },
+    });
   })
+  .get("/sw.js", () => {
+    const sw = readFileSync(join(publicDir, "sw.js"), "utf-8");
+    return new Response(sw, {
+      headers: {
+        "Content-Type": "application/javascript",
+        "Cache-Control": "no-cache",
+      },
+    });
+  })
+  .use(staticPlugin({ assets: publicDir, prefix: "/" }))
 
   .post("/api/trips", ({ body }) => {
     const { mode, weather, temp_c, note } = body as {
