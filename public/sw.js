@@ -32,6 +32,8 @@ self.addEventListener('fetch', (event) => {
         });
       })
     );
+  } else if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request));
   } else {
     event.respondWith(
       caches.match(event.request).then((cached) => {
