@@ -1,4 +1,4 @@
-const CACHE_NAME = 'commute-tracker-v1';
+const CACHE_NAME = 'commute-tracker';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

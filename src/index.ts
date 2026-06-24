@@ -5,6 +5,12 @@ import db from "./db";
 
 const app = new Elysia()
   .use(staticPlugin({ assets: join(process.cwd(), "public"), prefix: "/" }))
+  .onAfterHandle(({ path }, res) => {
+    if (path === "/sw.js" || path === "/index.html" || path === "/") {
+      res.headers = res.headers || {};
+      res.headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    }
+  })
 
   .post("/api/trips", ({ body }) => {
     const { mode, weather, temp_c, note } = body as {
