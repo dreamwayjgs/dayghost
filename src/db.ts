@@ -13,7 +13,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     timestamp TEXT NOT NULL,
     mode TEXT NOT NULL CHECK(mode IN ('walk','bus','bike')),
-    weather TEXT CHECK(weather IN ('clear','rain','snow','wind','cold','hot')),
+    weather TEXT CHECK(weather IN ('clear','cloudy','rain','snow','wind','cold','hot')),
     temp_c INTEGER,
     note TEXT,
     duration_sec INTEGER,

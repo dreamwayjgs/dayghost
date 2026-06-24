@@ -66,6 +66,7 @@
         <label>Weather</label><br>
         <select id="weather">
           <option value="clear">Clear</option>
+          <option value="cloudy">Cloudy</option>
           <option value="rain">Rain</option>
           <option value="snow">Snow</option>
           <option value="wind">Wind</option>
@@ -207,10 +208,20 @@
           distance_m += haversine(gpsPoints[i-1], gpsPoints[i]);
         }
 
+        const body = { duration_sec, distance_m: Math.round(distance_m) };
+        try {
+          const { lat, lng } = gpsPoints[0];
+          const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code`).then(r => r.json());
+          if (w.current) {
+            body.temp_c = Math.round(w.current.temperature_2m);
+            body.weather = wmoToWeather(w.current.weather_code);
+          }
+        } catch (e) { /* offline / API fail — keep manual values */ }
+
         await fetch(`/api/trips/${tripId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ duration_sec, distance_m: Math.round(distance_m) })
+          body: JSON.stringify(body)
         });
       }
 
@@ -222,6 +233,13 @@
       gpsPoints = [];
 
       loadTrips();
+    }
+
+    function wmoToWeather(code) {
+      if (code >= 71 && code <= 86) return 'snow';
+      if ((code >= 51 && code <= 67) || (code >= 80 && code <= 99)) return 'rain';
+      if (code === 2 || code === 3 || code === 45 || code === 48) return 'cloudy';
+      return 'clear';
     }
 
     function haversine(a, b) {
@@ -324,7 +342,7 @@
     }
 
     const MODES = ['walk', 'bus', 'bike'];
-    const WEATHERS = ['clear', 'rain', 'snow', 'wind', 'cold', 'hot'];
+    const WEATHERS = ['clear', 'cloudy', 'rain', 'snow', 'wind', 'cold', 'hot'];
     function optionsHtml(opts, sel) {
       return opts.map(o => `<option value="${o}"${o === sel ? ' selected' : ''}>${o}</option>`).join('');
     }
