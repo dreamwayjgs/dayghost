@@ -26,6 +26,17 @@
     .btn-locate { background: #3b82f6; color: white; }
     .btn-delete { background: none; color: #999; font-size: 12px; padding: 2px 6px; float: right; }
     .btn-delete:hover { color: #ef4444; }
+    .btn-edit { background: none; color: #999; font-size: 12px; padding: 2px 6px; float: right; }
+    .btn-edit:hover { color: #3b82f6; }
+    .trip-edit { margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; }
+    .trip-edit .form-row { margin-bottom: 6px; }
+    .trip-edit label { font-size: 11px; color: #888; }
+    .trip-edit select, .trip-edit input, .trip-edit textarea {
+      padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;
+    }
+    .trip-edit textarea { flex: 1; min-width: 160px; height: 44px; resize: vertical; }
+    .btn-save { background: #22c55e; color: white; font-size: 12px; padding: 4px 12px; }
+    .btn-cancel { background: #e5e5e5; color: #333; font-size: 12px; padding: 4px 12px; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .status { padding: 8px 12px; font-size: 13px; color: #666; }
     .status.recording { color: #ef4444; font-weight: 500; }
@@ -238,15 +249,32 @@
         const dist = t.distance_m ? `${(t.distance_m/1000).toFixed(1)}km` : '—';
         return `<div class="trip-item" data-id="${t.id}">
           <button class="btn-delete" data-id="${t.id}">✕</button>
+          <button class="btn btn-edit" data-id="${t.id}">edit</button>
           <div><strong>${t.mode}</strong> — ${d.toLocaleDateString()} ${d.toLocaleTimeString()}</div>
           <div class="trip-meta">${t.weather || '—'} ${t.temp_c != null ? t.temp_c+'°C' : ''} | ${dur} | ${dist} | ${t.point_count} pts</div>
           ${t.note ? `<div class="trip-meta">"${t.note}"</div>` : ''}
+          <div class="trip-edit" data-id="${t.id}" style="display:none">
+            <div class="form-row">
+              <div><label>Mode</label><br>
+                <select class="edit-mode">${optionsHtml(MODES, t.mode)}</select></div>
+              <div><label>Weather</label><br>
+                <select class="edit-weather">${optionsHtml(WEATHERS, t.weather)}</select></div>
+              <div><label>Temp (°C)</label><br>
+                <input type="number" class="edit-temp" style="width:60px" value="${t.temp_c != null ? t.temp_c : ''}"></div>
+              <div style="flex:1"><label>Note</label><br>
+                <textarea class="edit-note">${t.note ? t.note.replace(/</g,'&lt;') : ''}</textarea></div>
+            </div>
+            <div class="form-row">
+              <button class="btn btn-save" data-id="${t.id}">Save</button>
+              <button class="btn btn-cancel" data-id="${t.id}">Cancel</button>
+            </div>
+          </div>
         </div>`;
       }).join('');
 
       list.querySelectorAll('.trip-item').forEach(el => {
         el.addEventListener('click', (e) => {
-          if (e.target.classList.contains('btn-delete')) return;
+          if (e.target.closest('.btn-delete, .btn-edit, .trip-edit')) return;
           viewTrip(el.dataset.id);
         });
       });
@@ -259,6 +287,46 @@
           loadTrips();
         });
       });
+
+      list.querySelectorAll('.btn-edit').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const form = list.querySelector(`.trip-edit[data-id="${btn.dataset.id}"]`);
+          form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        });
+      });
+
+      list.querySelectorAll('.btn-cancel').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          list.querySelector(`.trip-edit[data-id="${btn.dataset.id}"]`).style.display = 'none';
+        });
+      });
+
+      list.querySelectorAll('.btn-save').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const form = list.querySelector(`.trip-edit[data-id="${btn.dataset.id}"]`);
+          const tempVal = form.querySelector('.edit-temp').value;
+          await fetch(`/api/trips/${btn.dataset.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: form.querySelector('.edit-mode').value,
+              weather: form.querySelector('.edit-weather').value,
+              temp_c: tempVal === '' ? null : parseInt(tempVal),
+              note: form.querySelector('.edit-note').value || null,
+            })
+          });
+          loadTrips();
+        });
+      });
+    }
+
+    const MODES = ['walk', 'bus', 'bike'];
+    const WEATHERS = ['clear', 'rain', 'snow', 'wind', 'cold', 'hot'];
+    function optionsHtml(opts, sel) {
+      return opts.map(o => `<option value="${o}"${o === sel ? ' selected' : ''}>${o}</option>`).join('');
     }
 
     async function viewTrip(id) {

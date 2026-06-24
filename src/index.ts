@@ -113,8 +113,11 @@ const app = new Elysia()
     const trips = db
       .query(
         `
-        SELECT 
-          t.*,
+        SELECT
+          t.id, t.timestamp, t.mode, t.weather, t.temp_c, t.note, t.distance_m,
+          COALESCE(t.duration_sec,
+            (SELECT CAST((julianday(MAX(ts)) - julianday(MIN(ts))) * 86400 AS INTEGER)
+             FROM gps_points WHERE trip_id = t.id)) as duration_sec,
           (SELECT COUNT(*) FROM gps_points WHERE trip_id = t.id) as point_count
         FROM trips t
         ORDER BY t.timestamp DESC
