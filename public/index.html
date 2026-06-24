@@ -23,6 +23,9 @@
     }
     .btn-start { background: #22c55e; color: white; }
     .btn-stop { background: #ef4444; color: white; }
+    .btn-locate { background: #3b82f6; color: white; }
+    .btn-delete { background: none; color: #999; font-size: 12px; padding: 2px 6px; float: right; }
+    .btn-delete:hover { color: #ef4444; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .status { padding: 8px 12px; font-size: 13px; color: #666; }
     .status.recording { color: #ef4444; font-weight: 500; }
@@ -72,6 +75,7 @@
     <div class="form-row">
       <button id="startBtn" class="btn btn-start">Start Recording</button>
       <button id="stopBtn" class="btn btn-stop" disabled>Stop & Save</button>
+      <button id="locateBtn" class="btn btn-locate">Locate</button>
     </div>
   </div>
   <div id="status" class="status">Ready</div>
@@ -93,10 +97,40 @@
 
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
+    const locateBtn = document.getElementById('locateBtn');
     const statusEl = document.getElementById('status');
 
     startBtn.addEventListener('click', startRecording);
     stopBtn.addEventListener('click', stopRecording);
+    locateBtn.addEventListener('click', locateMe);
+
+    function locateMe() {
+      if (!navigator.geolocation) {
+        statusEl.textContent = 'GPS not supported';
+        return;
+      }
+      locateBtn.disabled = true;
+      locateBtn.textContent = '...';
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          map.setView([lat, lng], 16);
+          if (currentMarker) {
+            currentMarker.setLatLng([lat, lng]);
+          } else {
+            currentMarker = L.circleMarker([lat, lng], { radius: 6, color: '#22c55e' }).addTo(map);
+          }
+          locateBtn.disabled = false;
+          locateBtn.textContent = 'Locate';
+        },
+        (err) => {
+          statusEl.textContent = 'GPS error: ' + err.message;
+          locateBtn.disabled = false;
+          locateBtn.textContent = 'Locate';
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
 
     async function startRecording() {
       const mode = document.getElementById('mode').value;
@@ -204,6 +238,7 @@
         const dur = t.duration_sec ? `${Math.round(t.duration_sec/60)}m` : '—';
         const dist = t.distance_m ? `${(t.distance_m/1000).toFixed(1)}km` : '—';
         return `<div class="trip-item" data-id="${t.id}">
+          <button class="btn-delete" data-id="${t.id}">✕</button>
           <div><strong>${t.mode}</strong> — ${d.toLocaleDateString()} ${d.toLocaleTimeString()}</div>
           <div class="trip-meta">${t.weather || '—'} ${t.temp_c != null ? t.temp_c+'°C' : ''} | ${dur} | ${dist} | ${t.point_count} pts</div>
           ${t.note ? `<div class="trip-meta">"${t.note}"</div>` : ''}
@@ -211,7 +246,19 @@
       }).join('');
 
       list.querySelectorAll('.trip-item').forEach(el => {
-        el.addEventListener('click', () => viewTrip(el.dataset.id));
+        el.addEventListener('click', (e) => {
+          if (e.target.classList.contains('btn-delete')) return;
+          viewTrip(el.dataset.id);
+        });
+      });
+
+      list.querySelectorAll('.btn-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!confirm('Delete this trip?')) return;
+          await fetch(`/api/trips/${btn.dataset.id}`, { method: 'DELETE' });
+          loadTrips();
+        });
       });
     }
 
