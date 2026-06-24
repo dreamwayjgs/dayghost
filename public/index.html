@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Commute GPS Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    #map { height: 50vh; width: 100%; }
+    .controls { padding: 12px; background: #f5f5f5; }
+    .form-row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .form-row label { font-size: 12px; color: #666; }
+    .form-row select, .form-row input, .form-row textarea {
+      padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;
+    }
+    .form-row textarea { flex: 1; min-width: 200px; height: 60px; resize: vertical; }
+    .btn {
+      padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;
+      font-size: 14px; font-weight: 500;
+    }
+    .btn-start { background: #22c55e; color: white; }
+    .btn-stop { background: #ef4444; color: white; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status { padding: 8px 12px; font-size: 13px; color: #666; }
+    .status.recording { color: #ef4444; font-weight: 500; }
+    .trip-list { padding: 12px; max-height: 40vh; overflow-y: auto; }
+    .trip-item {
+      padding: 10px; margin-bottom: 8px; background: white; border: 1px solid #eee;
+      border-radius: 6px; cursor: pointer;
+    }
+    .trip-item:hover { border-color: #3b82f6; }
+    .trip-meta { font-size: 12px; color: #666; margin-top: 4px; }
+    h3 { padding: 12px 12px 0; font-size: 14px; color: #333; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="controls">
+    <div class="form-row">
+      <div>
+        <label>Mode</label><br>
+        <select id="mode">
+          <option value="walk">Walk</option>
+          <option value="bus">Bus</option>
+          <option value="bike">Bike</option>
+        </select>
+      </div>
+      <div>
+        <label>Weather</label><br>
+        <select id="weather">
+          <option value="">Unknown</option>
+          <option value="clear">Clear</option>
+          <option value="rain">Rain</option>
+          <option value="snow">Snow</option>
+          <option value="wind">Wind</option>
+          <option value="cold">Cold</option>
+          <option value="hot">Hot</option>
+        </select>
+      </div>
+      <div>
+        <label>Temp (°C)</label><br>
+        <input type="number" id="temp" placeholder="—" style="width: 60px;">
+      </div>
+      <div style="flex:1">
+        <label>Note</label><br>
+        <textarea id="note" placeholder="Optional note..."></textarea>
+      </div>
+    </div>
+    <div class="form-row">
+      <button id="startBtn" class="btn btn-start">Start Recording</button>
+      <button id="stopBtn" class="btn btn-stop" disabled>Stop & Save</button>
+    </div>
+  </div>
+  <div id="status" class="status">Ready</div>
+
+  <h3>Past Trips</h3>
+  <div id="tripList" class="trip-list">Loading...</div>
+
+  <script>
+    const map = L.map('map').setView([37.5665, 126.978], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    let currentMarker = null;
+    let trail = null;
+    let watchId = null;
+    let tripId = null;
+    let gpsPoints = [];
+
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const statusEl = document.getElementById('status');
+
+    startBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+
+    async function startRecording() {
+      const mode = document.getElementById('mode').value;
+      const weather = document.getElementById('weather').value || null;
+      const temp = document.getElementById('temp').value ? parseInt(document.getElementById('temp').value) : null;
+      const note = document.getElementById('note').value || null;
+
+      const res = await fetch('/api/trips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, weather, temp_c: temp, note })
+      });
+      const data = await res.json();
+      tripId = data.id;
+      gpsPoints = [];
+
+      trail = L.polyline([], { color: '#3b82f6', weight: 3 }).addTo(map);
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      statusEl.textContent = 'Recording...';
+      statusEl.classList.add('recording');
+
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          const ts = new Date().toISOString();
+
+          gpsPoints.push({ lat, lng, ts });
+          trail.addLatLng([lat, lng]);
+          map.setView([lat, lng]);
+
+          if (currentMarker) {
+            currentMarker.setLatLng([lat, lng]);
+          } else {
+            currentMarker = L.circleMarker([lat, lng], { radius: 6, color: '#22c55e' }).addTo(map);
+          }
+
+          fetch(`/api/trips/${tripId}/gps`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat, lng, ts })
+          });
+        },
+        (err) => {
+          statusEl.textContent = 'GPS error: ' + err.message;
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+      );
+    }
+
+    async function stopRecording() {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+
+      if (tripId && gpsPoints.length > 1) {
+        const start = new Date(gpsPoints[0].ts);
+        const end = new Date(gpsPoints[gpsPoints.length - 1].ts);
+        const duration_sec = Math.round((end - start) / 1000);
+
+        let distance_m = 0;
+        for (let i = 1; i < gpsPoints.length; i++) {
+          distance_m += haversine(gpsPoints[i-1], gpsPoints[i]);
+        }
+
+        await fetch(`/api/trips/${tripId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ duration_sec, distance_m: Math.round(distance_m) })
+        });
+      }
+
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      statusEl.textContent = 'Saved!';
+      statusEl.classList.remove('recording');
+      tripId = null;
+      gpsPoints = [];
+
+      loadTrips();
+    }
+
+    function haversine(a, b) {
+      const R = 6371000;
+      const dLat = (b.lat - a.lat) * Math.PI / 180;
+      const dLng = (b.lng - a.lng) * Math.PI / 180;
+      const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180) * Math.cos(b.lat*Math.PI/180) * Math.sin(dLng/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+    }
+
+    let replayTrail = null;
+    async function loadTrips() {
+      const res = await fetch('/api/trips');
+      const trips = await res.json();
+      const list = document.getElementById('tripList');
+
+      if (trips.length === 0) {
+        list.innerHTML = '<div style="color:#999;padding:8px;">No trips yet</div>';
+        return;
+      }
+
+      list.innerHTML = trips.map(t => {
+        const d = new Date(t.timestamp);
+        const dur = t.duration_sec ? `${Math.round(t.duration_sec/60)}m` : '—';
+        const dist = t.distance_m ? `${(t.distance_m/1000).toFixed(1)}km` : '—';
+        return `<div class="trip-item" data-id="${t.id}">
+          <div><strong>${t.mode}</strong> — ${d.toLocaleDateString()} ${d.toLocaleTimeString()}</div>
+          <div class="trip-meta">${t.weather || '—'} ${t.temp_c != null ? t.temp_c+'°C' : ''} | ${dur} | ${dist} | ${t.point_count} pts</div>
+          ${t.note ? `<div class="trip-meta">"${t.note}"</div>` : ''}
+        </div>`;
+      }).join('');
+
+      list.querySelectorAll('.trip-item').forEach(el => {
+        el.addEventListener('click', () => viewTrip(el.dataset.id));
+      });
+    }
+
+    async function viewTrip(id) {
+      const res = await fetch(`/api/trips/${id}`);
+      const data = await res.json();
+
+      if (replayTrail) {
+        map.removeLayer(replayTrail);
+      }
+
+      const pts = data.gps.map(g => [g[0], g[1]]);
+      replayTrail = L.polyline(pts, { color: '#f59e0b', weight: 3 }).addTo(map);
+      if (pts.length > 0) {
+        map.fitBounds(replayTrail.getBounds(), { padding: [20, 20] });
+      }
+    }
+
+    loadTrips();
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js');
+    }
+  </script>
+</body>
+</html>
