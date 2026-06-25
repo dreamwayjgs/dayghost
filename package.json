@@ -1,5 +1,5 @@
 {
-  "name": "daylight-ghost",
+  "name": "dayghost",
   "module": "index.ts",
   "type": "module",
   "private": true,

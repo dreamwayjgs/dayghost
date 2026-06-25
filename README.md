@@ -1,4 +1,4 @@
-# daylight-ghost
+# dayghost
 
 To install dependencies:
 
