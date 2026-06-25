@@ -62,22 +62,6 @@
           <option value="bike">Bike</option>
         </select>
       </div>
-      <div>
-        <label>Weather</label><br>
-        <select id="weather">
-          <option value="clear">Clear</option>
-          <option value="cloudy">Cloudy</option>
-          <option value="rain">Rain</option>
-          <option value="snow">Snow</option>
-          <option value="wind">Wind</option>
-          <option value="cold">Cold</option>
-          <option value="hot">Hot</option>
-        </select>
-      </div>
-      <div>
-        <label>Temp (°C)</label><br>
-        <input type="number" id="temp" placeholder="—" style="width: 60px;">
-      </div>
       <div style="flex:1">
         <label>Note</label><br>
         <textarea id="note" placeholder="Optional note..."></textarea>
@@ -145,14 +129,12 @@
 
     async function startRecording() {
       const mode = document.getElementById('mode').value;
-      const weather = document.getElementById('weather').value || null;
-      const temp = document.getElementById('temp').value ? parseInt(document.getElementById('temp').value) : null;
       const note = document.getElementById('note').value || null;
 
       const res = await fetch('/api/trips', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, weather, temp_c: temp, note })
+        body: JSON.stringify({ mode, note })
       });
       const data = await res.json();
       tripId = data.id;
