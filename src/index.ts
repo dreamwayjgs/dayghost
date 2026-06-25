@@ -30,19 +30,20 @@ const app = new Elysia()
   .use(staticPlugin({ assets: publicDir, prefix: "/" }))
 
   .post("/api/trips", ({ body }) => {
-    const { mode, weather, temp_c, note } = body as {
+    const { mode, weather, temp_c, note, kind } = body as {
       mode: string;
       weather?: string;
       temp_c?: number;
       note?: string;
+      kind?: string;
     };
 
     const id = crypto.randomUUID();
     const timestamp = new Date().toISOString();
 
     db.query(
-      "INSERT INTO trips (id, timestamp, mode, weather, temp_c, note) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(id, timestamp, mode, weather ?? null, temp_c ?? null, note ?? null);
+      "INSERT INTO trips (id, timestamp, mode, weather, temp_c, note, kind) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(id, timestamp, mode, weather ?? null, temp_c ?? null, note ?? null, kind ?? "trip");
 
     return { id };
   })
@@ -114,7 +115,7 @@ const app = new Elysia()
       .query(
         `
         SELECT
-          t.id, t.timestamp, t.mode, t.weather, t.temp_c, t.note, t.distance_m,
+          t.id, t.timestamp, t.mode, t.weather, t.temp_c, t.note, t.distance_m, t.kind,
           COALESCE(t.duration_sec,
             (SELECT CAST((julianday(MAX(ts)) - julianday(MIN(ts))) * 86400 AS INTEGER)
              FROM gps_points WHERE trip_id = t.id)) as duration_sec,

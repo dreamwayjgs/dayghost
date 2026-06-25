@@ -17,7 +17,8 @@ db.exec(`
     temp_c INTEGER,
     note TEXT,
     duration_sec INTEGER,
-    distance_m REAL
+    distance_m REAL,
+    kind TEXT NOT NULL DEFAULT 'trip'
   );
 
   CREATE TABLE IF NOT EXISTS gps_points (
@@ -28,5 +29,11 @@ db.exec(`
     ts TEXT NOT NULL
   );
 `);
+
+// Auto-migrate existing DBs: add kind column if missing (no table rebuild needed)
+const tripCols = db.query("PRAGMA table_info(trips)").all() as { name: string }[];
+if (!tripCols.some((c) => c.name === "kind")) {
+  db.exec("ALTER TABLE trips ADD COLUMN kind TEXT NOT NULL DEFAULT 'trip'");
+}
 
 export default db;
