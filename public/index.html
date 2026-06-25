@@ -89,6 +89,18 @@
     let watchId = null;
     let tripId = null;
     let gpsPoints = [];
+    let wakeLock = null;
+
+    async function requestWakeLock() {
+      try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { /* unsupported / denied */ }
+    }
+
+    // Wake lock auto-releases when tab hidden — re-acquire on foreground while recording
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && watchId !== null && wakeLock === null) {
+        requestWakeLock();
+      }
+    });
 
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
@@ -145,6 +157,7 @@
       stopBtn.disabled = false;
       statusEl.textContent = 'Recording...';
       statusEl.classList.add('recording');
+      requestWakeLock();
 
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
@@ -179,6 +192,8 @@
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
       }
+
+      if (wakeLock) { await wakeLock.release(); wakeLock = null; }
 
       if (tripId && gpsPoints.length > 1) {
         const start = new Date(gpsPoints[0].ts);
