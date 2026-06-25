@@ -245,7 +245,7 @@
 
       list.innerHTML = trips.map(t => {
         const d = new Date(t.timestamp);
-        const dur = t.duration_sec ? `${Math.round(t.duration_sec/60)}m` : '—';
+        const dur = t.duration_sec ? `${Math.floor(t.duration_sec/60)}m ${t.duration_sec%60}s` : '—';
         const dist = t.distance_m ? `${(t.distance_m/1000).toFixed(1)}km` : '—';
         return `<div class="trip-item" data-id="${t.id}">
           <button class="btn-delete" data-id="${t.id}">✕</button>
